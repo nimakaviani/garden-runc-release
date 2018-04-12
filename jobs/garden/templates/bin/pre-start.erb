@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+set -e
+
+source /var/vcap/jobs/garden/bin/envs
+source /var/vcap/packages/greenskeeper/bin/system-preparation
+
+log "preparing system"
+permit_device_control
+log "done"
+
+log "running thresholder"
+/var/vcap/packages/thresholder/bin/thresholder "<%= p("garden.graph_cleanup_threshold_in_mb") %>" "<%= p("grootfs.graph_cleanup_threshold_in_mb") %>" "<%= p("grootfs.reserved_space_for_other_jobs_in_mb") %>" "$DATA_DIR" "$GARDEN_CONFIG_DIR/grootfs_config.yml"
+/var/vcap/packages/thresholder/bin/thresholder "<%= p("garden.graph_cleanup_threshold_in_mb") %>" "<%= p("grootfs.graph_cleanup_threshold_in_mb") %>" "<%= p("grootfs.reserved_space_for_other_jobs_in_mb") %>" "$DATA_DIR" "$GARDEN_CONFIG_DIR/privileged_grootfs_config.yml"
+log "done"
+
+<% if p("garden.apparmor_profile") == "garden-default" %>
+  load_apparmor_profile "$GARDEN_CONFIG_DIR"/garden-default
+<% end %>
+
+if ! echo madvise > /sys/kernel/mm/transparent_hugepage/enabled ; then
+  echo "Could not disable automatic transparent hugepage allocation. This is normal in bosh lite."
+fi
+
+echo 1 > /proc/sys/kernel/dmesg_restrict
+
+ulimit -n 65536
+echo 4194304 > /proc/sys/kernel/pid_max
+ulimit -u unlimited
+
+cp /sbin/mkfs.xfs /bin/mkfs.xfs
+
